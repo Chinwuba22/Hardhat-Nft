@@ -1,5 +1,5 @@
 const { network, ethers } = require("hardhat")
-const { developmentChains } = require("../helper-hardhat-config")
+const { developmentChains, networkConfig } = require("../helper-hardhat-config")
 const { verify } = require("../utils/verify")
 const fs = require("fs")
 
@@ -14,14 +14,13 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
         const EthUsdAggregator = await deployments.get("MockV3Aggregator")
         ethUsdPriceFeedAddress = EthUsdAggregator.address
     } else {
-        ethUsdPriceFeedAddress = network.config[chainId].ethUsdPriceFeed
+        ethUsdPriceFeedAddress = networkConfig[chainId].ethUsdPriceFeed
     }
-
-    log("---------------------------")
 
     const lowSvg = await fs.readFileSync("./images/dynamicNft/frown.svg", { encoding: "utf8" })
     const highSvg = await fs.readFileSync("./images/dynamicNft/happy.svg", { encoding: "utf8" })
-    log(ethUsdPriceFeedAddress)
+
+    log("---------------------------")
     args = [ethUsdPriceFeedAddress, lowSvg, highSvg]
     const dynamicSvgNft = await deploy("DynamicSvgNft", {
         from: deployer,
