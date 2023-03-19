@@ -5,7 +5,13 @@ const { storeImages, storeTokenUriMetadata } = require("../utils/uploadToPinata"
 
 const imagesLocation = "./images/randomNft"
 
-let tokenUris
+let tokenUris = [
+    "ipfs://QmS1KexR5sMixXqLsbcwrd2gCQRA3nAj9jz6T6GF7Xf4sJ",
+    "ipfs://QmccjshH5Md5ZzLeZW4bFpkjguFL2z4MmcFRjXxrNZwNhJ",
+    "ipfs://Qmc424MoUb8AfFTZPCGAir8X1JzfYKFs9YC6cFJ9AbkRko",
+]
+
+const FUND_AMOUNT = "1000000000000000000000"
 
 const metadataTemplate = {
     name: "",
@@ -23,19 +29,19 @@ module.exports = async function ({ getNamedAccounts, deployments }) {
     const { deploy, log } = deployments
     const { deployer } = await getNamedAccounts()
     const chainId = network.config.chainId
+    let vrfCoordinatorV2Address, subscriptionId, vrfCoordinatorV2Mock
 
     if (process.env.UPLOAD_TO_PINATA == "true") {
         tokenUris = await handleTokenUris()
     }
 
-    let vrfCoordinatorV2Address, subscriptionId
-
     if (developmentChains.includes(network.name)) {
-        const vrfCoordinatorV2Mock = await ethers.getContract("VRFCoordinatorV2Mock")
+        vrfCoordinatorV2Mock = await ethers.getContract("VRFCoordinatorV2Mock")
         vrfCoordinatorV2Address = vrfCoordinatorV2Mock.address
         const tx = await vrfCoordinatorV2Mock.createSubscription()
         const txReceipt = await tx.wait(1)
         subscriptionId = txReceipt.events[0].args.subId
+        await vrfCoordinatorV2Mock.fundSubscription(subscriptionId, FUND_AMOUNT)
     } else {
         vrfCoordinatorV2Address = networkConfig[chainId].vrfCoordinatorV2
         subscriptionId = networkConfig[chainId].subscriptionId
@@ -46,23 +52,23 @@ module.exports = async function ({ getNamedAccounts, deployments }) {
     const args = [
         vrfCoordinatorV2Address,
         subscriptionId,
-        networkConfig[chainId].callbackGasLimit,
         networkConfig[chainId].gasLane,
+        networkConfig[chainId].callbackGasLimit,
         tokenUris,
         networkConfig[chainId].mintFee,
     ]
-    console.log(
-        `subscriptionId: ${subscriptionId},
-        gasLane: ${networkConfig[chainId]["gasLane"]},
-        Call Gas Limit: ${networkConfig[chainId]["callbackGasLimit"]},
-        MintFee: ${networkConfig[chainId]["mintFee"]}, vrf Address: ${vrfCoordinatorV2Address}`
-    )
+
     const randomIpfsNft = await deploy("RandomIpfsNft", {
         from: deployer,
         args: args,
         log: true,
         waitConfirmations: network.config.blockConfirmations || 1,
     })
+
+    if (developmentChains.includes(network.name)) {
+        await vrfCoordinatorV2Mock.addConsumer(subscriptionId, randomIpfsNft.address)
+    }
+
     log("--------------------------------------")
     if (!developmentChains.includes(network.name) && process.env.ETHERSCAN_API_KEY) {
         log("Verifying...")
